@@ -1,0 +1,8 @@
+PlexAPI==4.17.0
+Unidecode==1.4.0
+mutagen==1.47.0
+pillow==11.2.1
+ffmpeg==1.4
+ffmpeg-python==0.2.0
+pydub==0.25.1
+audioop-lts==0.2.1

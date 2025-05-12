@@ -1,0 +1,44 @@
+name: Build and Upload PyInstaller Artifacts
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            architecture: x86_64
+          - os: macos-latest
+            architecture: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Build executable with PyInstaller
+        uses: sayyid5416/pyinstaller@v1.8.0
+        with:
+          spec: PlexPlaylistSync.py
+          requirements: requirements.txt
+          options: --onefile
+
+      - name: Archive artifact
+        run: |
+          mkdir -p dist/${{ matrix.os }}_${{ matrix.architecture }}
+          mv dist/PlexPlaylistSync dist/${{ matrix.os }}_${{ matrix.architecture }}/
+          tar -czvf dist/${{ matrix.os }}_${{ matrix.architecture }}.tar.gz -C dist/ ${{ matrix.os }}_${{ matrix.architecture }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}_${{ matrix.architecture }}_artifact
+          path: dist/${{ matrix.os }}_${{ matrix.architecture }}.tar.gz

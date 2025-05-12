@@ -1,0 +1,8 @@
+venv/
+out/
+Lidarr/
+Playlists/
+dist/
+build/
+__pycache__/
+*.spec
