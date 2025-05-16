@@ -1,10 +1,8 @@
 #!/bin/bash
-
 set -e
-venvPath="$scriptDirectory/venv"
 
 # ensure venv
-if [ ! -d "$venvPath" ]; then
+if [ ! -d "venv" ]; then
     mkdir venv
     python3 -m venv venv
     source venv/bin/activate

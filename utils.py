@@ -1,7 +1,9 @@
 import os
 import io
+import re
 import shutil
 import argparse
+import subprocess
 from PIL import Image
 
 def parse_args():
@@ -9,8 +11,8 @@ def parse_args():
     parser.add_argument(
         '--fs-music-root',
         type = str,
-        help = "The root of the filesystem music library location, for instance '/music'",
-        default = '/Volumes/Media/Music/Lidarr'
+        help = "The root of the filesystem music library location, for instance '/smb-mounts/media/music'",
+        default = '/run/user/1000/gvfs/smb-share:server=192.168.103.7,share=media/Music/Lidarr'
     )
     parser.add_argument(
         '--plex-music-root',
@@ -21,8 +23,8 @@ def parse_args():
     parser.add_argument(
         '--out-dir',
         type = str,
-        help = "Root dir for the output files, eg your flash drive",
-        default = 'out/'
+        help = "Root dir for the output files, eg your flash drive (/run/media/$USER/FLASHDRIVENAME)",
+        default = '/run/media/danny/DINKUS'
     )
     parser.add_argument(
         '--host',
@@ -51,13 +53,22 @@ def rename_file_keep_extension(file_path, new_name):
 def rename_filename_keep_extension(file_path, new_name):
     directory, old_filename = os.path.split(file_path)
     _, extension = os.path.splitext(old_filename)
-    return os.path.join(directory, new_name + extension)
+    result = os.path.join(directory, new_name + extension)
+    return result
 
 def get_minute_rounded_mtime(filepath):
     """Get the file modification time rounded to the nearest minute."""
     return int(os.path.getmtime(filepath) // 60)  # Round down to minute precision
 
 def copy_file_if_newer(src, dst):
+    copy = should_copy_file_if_newer(src, dst)
+    if copy:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)  # Copies metadata including timestamps
+
+    return copy
+
+def should_copy_file_if_newer(src, dst):
     if not os.path.exists(src):
         raise FileNotFoundError(f"Source file does not exist: {src}")
     
@@ -68,9 +79,7 @@ def copy_file_if_newer(src, dst):
         if src_mtime <= dst_mtime:
             return False  # No need to copy
 
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    shutil.copy2(src, dst)  # Copies metadata including timestamps
-    return True  # File was copied
+    return True # file should be copied
 
 def copy_modification_time(src, dst):
     mod_time = get_minute_rounded_mtime(src)
@@ -87,7 +96,7 @@ def convert_album_art_image_baseline_jpeg(image_data, filepath):
     (width, height), img_format, is_progressive = get_image_dimensions_format_and_progressive(image_data)
     
     if max(width, height) <= MAX_SIZE and img_format == "JPEG" and not is_progressive:
-        print(f"- {os.path.basename(filepath)}... OK!")
+        # print(f"- {os.path.basename(filepath)}... OK!")
         return image_data  # Skip processing if already within limits and baseline JPEG
     
     with Image.open(io.BytesIO(image_data)) as img:
@@ -97,3 +106,60 @@ def convert_album_art_image_baseline_jpeg(image_data, filepath):
         img.save(output, format="JPEG", quality=85, progressive=False)
         print(f"- {os.path.basename(filepath)}... Converted.")
         return output.getvalue()
+
+def is_gvfs_smb_share(path):
+    """Check if the path is a GVfs-mounted SMB share."""
+    gvfs_base = f"/run/user/{os.getuid()}/gvfs/"
+    
+    # Ensure the path starts with the GVfs base directory
+    if not path.startswith(gvfs_base):
+        return False, None, None, None
+
+    # Extract the GVfs share path
+    relative_path = path[len(gvfs_base):]
+
+    # Regex to detect the GVfs SMB share pattern (with optional subdirectories)
+    gvfs_smb_pattern = r"^smb-share:server=([^,]+),share=([^/]+)(/.*)?"
+    match = re.match(gvfs_smb_pattern, relative_path)
+    
+    if match:
+        server, share, subdirs = match.groups()
+        subdirs = subdirs if subdirs else ""
+        # print(f"Detected GVfs SMB share: server={server}, share={share}, subdirs={subdirs}")
+        return True, server, share, subdirs
+    
+    # print("Not a GVfs SMB share")
+    return False, None, None, None
+
+def mount_gvfs_share(server, share):
+    """Attempt to mount the GVfs SMB share."""
+    try:
+        share_url = f"smb://{server}/{share}"
+        result = subprocess.run(
+            ["gio", "mount", share_url],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print(f"Successfully mounted {share_url}")
+            return True
+        print(f"Mount failed: {result.stderr}")
+    except Exception as e:
+        print(f"Error during mounting: {e}")
+    return False
+
+def ensure_access_to_folder(path):
+    is_smb, server, share, subdirs = is_gvfs_smb_share(path)
+
+    if is_smb:
+        mount_point = f"/run/user/{os.getuid()}/gvfs/smb-share:server={server},share={share}"
+        if not (os.path.exists(mount_point) and os.listdir(mount_point)):
+            print(f"Attempting to mount {mount_point}...")
+            if not mount_gvfs_share(server, share): # logs out result
+                return False
+            else:
+                return True
+        else:
+            return True # no log, already mounted
+    else:
+        return True # no log, not a gvfs share
