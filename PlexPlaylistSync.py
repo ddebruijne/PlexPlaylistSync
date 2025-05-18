@@ -201,16 +201,19 @@ def parse_album_art(root_folder):
     return errors
 
 def main():
-    args = parse_args()
     start_time = time.time()
+
+    args = parse_args()
+    config, config_path = load_config(args.out_dir)
+    update_config(config_path, config, args)
 
     print('Checking folder paths...')
     ensure_access_to_folder(args.out_dir)
-    ensure_access_to_folder(args.fs_music_root)
+    ensure_access_to_folder(config.fs_music_root)
 
     print('Connecting to Plex...', end='')
     try:
-        plex = PlexServer(args.host, args.token)
+        plex = PlexServer(config.host, config.token)
     except (plexapi.exceptions.Unauthorized, requests.exceptions.ConnectionError) as err:
         print(' failed. Check your token and/or host')
         print(err)
@@ -239,8 +242,8 @@ def main():
         playlist_items = get_playlist_items(
             plex,
             playlist_name,
-            args.plex_music_root,
-            args.fs_music_root,
+            config.plex_music_root,
+            config.fs_music_root,
             args.out_dir,
         )
         if playlist_items is None:

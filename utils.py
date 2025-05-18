@@ -1,45 +1,97 @@
+import json
 import os
 import io
 import re
 import shutil
 import argparse
+import socket
 import subprocess
 from PIL import Image
+
+class Config(dict):
+    def __getattr__(self, item):
+        try:
+            return self[item]
+        except KeyError:
+            raise AttributeError(f"'Config' object has no attribute '{item}'")
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+DEFAULT_CONFIG = Config({
+    "fs_music_root": "/run/user/1000/gvfs/smb-share:server=192.168.103.7,share=media/Music/Lidarr",
+    "plex_music_root": "/media/Music/Lidarr",
+    "host": "http://plex.jn:32400",
+    "token": None,
+})
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        '--out-dir',
+        type = str,
+        help = "Root dir for the output files, eg your flash drive (/run/media/$USER/FLASHDRIVENAME)",
+        default = "out",
+        required=True
+    )
+    parser.add_argument(
         '--fs-music-root',
         type = str,
         help = "The root of the filesystem music library location, for instance '/smb-mounts/media/music'",
-        default = '/run/user/1000/gvfs/smb-share:server=192.168.103.7,share=media/Music/Lidarr'
+        default = DEFAULT_CONFIG.fs_music_root
     )
     parser.add_argument(
         '--plex-music-root',
         type = str,
         help = "The root of the plex music library location, for instance '/music'",
-        default = '/media/Music/Lidarr'
-    )
-    parser.add_argument(
-        '--out-dir',
-        type = str,
-        help = "Root dir for the output files, eg your flash drive (/run/media/$USER/FLASHDRIVENAME)",
-        default = '/run/media/danny/DINKUS'
+        default = DEFAULT_CONFIG.plex_music_root
     )
     parser.add_argument(
         '--host',
         type = str,
         help = "The URL to the Plex Server, i.e.: http://192.168.0.100:32400",
-        default = 'http://plex.jn:32400'
+        default = DEFAULT_CONFIG.host
     )
     parser.add_argument(
         '--token',
         type = str,
         help = "The Token used to authenticate with the Plex Server",
-        default = None,
-        required = True
+        default = DEFAULT_CONFIG.token
     )
     return parser.parse_args()
+
+def get_machine_name():
+    return socket.gethostname()
+
+def load_config(output_dir):
+    machine_name = get_machine_name()
+    config_filename = f"config_{machine_name}.json"
+    config_path = os.path.join(output_dir, config_filename)
+
+    # Check if the config file exists
+    if not os.path.exists(config_path):
+        print(f"Config file not found. Creating default at {config_path}.")
+        os.makedirs(output_dir, exist_ok=True)
+        with open(config_path, 'w') as file:
+            json.dump(DEFAULT_CONFIG, file, indent=4)
+
+    # Load the configuration
+    with open(config_path, 'r') as file:
+        data = json.load(file)
+        config = Config(data)
+        return config, config_path
+
+
+def update_config(config_path, config, args):
+    new_values = {k: v for k, v in vars(args).items() if v is not None and k != "out_dir"}
+    if not new_values:
+        return
+
+    config.update(new_values)
+    with open(config_path, 'w') as file:
+        json.dump(config, file, indent=4)
+    print(f"Updated configuration saved to {config_path}")
+
 
 def rename_file_keep_extension(file_path, new_name):
     directory, old_filename = os.path.split(file_path)
