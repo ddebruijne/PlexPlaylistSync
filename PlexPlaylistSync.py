@@ -231,7 +231,6 @@ def main():
     playlistDir = os.path.join(args.out_dir, "Playlists")
     if os.path.exists(playlistDir):
         shutil.rmtree(playlistDir)
-        print('Deleted old playlists')
 
     print('')
     playlist_titles = get_playlists(plex)
@@ -254,18 +253,22 @@ def main():
             continue
         print('.', end='', flush=True)
         
-        create_m3u_simple_abstract(
-            playlist_name,
-            playlist_items,
-            simpleAbsDir,
-        )
-        print('.', end='', flush=True)
+        if config.sync_simple_abstract: 
+            create_m3u_simple_abstract(
+                playlist_name,
+                playlist_items,
+                simpleAbsDir,
+            )
+            print('.', end='', flush=True)
 
-        create_m3u8_extended_relative(
-            playlist_name,
-            playlist_items,
-            playlistDir,
-        )
+        if config.sync_extended_relative:
+            create_m3u8_extended_relative(
+                playlist_name,
+                playlist_items,
+                playlistDir,
+            )
+            print('.', end='', flush=True)
+
         print(' Done')
 
         for item in playlist_items:

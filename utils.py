@@ -22,6 +22,8 @@ DEFAULT_CONFIG = Config({
     "fs_music_root": "/run/user/1000/gvfs/smb-share:server=192.168.103.7,share=media/Music/Lidarr",
     "plex_music_root": "/media/Music/Lidarr",
     "host": "http://plex.jn:32400",
+    "sync_extended_relative": True,
+    "sync_simple_abstract": False,
     "token": None,
 })
 
@@ -32,31 +34,36 @@ def parse_args():
         type = str,
         help = "Root dir for the output files, eg your flash drive (/run/media/$USER/FLASHDRIVENAME)",
         default = "out",
-        required=True
     )
     parser.add_argument(
         '--fs-music-root',
         type = str,
         help = "The root of the filesystem music library location, for instance '/smb-mounts/media/music'",
-        default = DEFAULT_CONFIG.fs_music_root
     )
     parser.add_argument(
         '--plex-music-root',
         type = str,
         help = "The root of the plex music library location, for instance '/music'",
-        default = DEFAULT_CONFIG.plex_music_root
     )
     parser.add_argument(
         '--host',
         type = str,
         help = "The URL to the Plex Server, i.e.: http://192.168.0.100:32400",
-        default = DEFAULT_CONFIG.host
     )
     parser.add_argument(
         '--token',
         type = str,
         help = "The Token used to authenticate with the Plex Server",
-        default = DEFAULT_CONFIG.token
+    )
+    parser.add_argument(
+        '--sync-extended-relative',
+        type = bool,
+        help = "Whether to sync playlist files with relative paths and extended information, as .m3u8. Recommended for Rockbox, Mazda Connect",
+    )
+    parser.add_argument(
+        '--sync-simple-abstract',
+        type = bool,
+        help = "Whether to sync playlist files with abstract paths (root = out-dir) and no information, as .m3u. Recommended for Peugeot infotainment system (e-208)",
     )
     return parser.parse_args()
 
