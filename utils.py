@@ -222,3 +222,39 @@ def ensure_access_to_folder(path):
             return True # no log, already mounted
     else:
         return True # no log, not a gvfs share
+
+def get_bit_depth(file_path):
+    cmd = [
+        'ffprobe', '-v', 'error',
+        '-select_streams', 'a:0',
+        '-show_entries', 'stream=bits_per_raw_sample',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        file_path
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode == 0:
+        output = result.stdout.strip()
+        if output:
+            return int(output)
+    return None
+
+def convert_to_16bit(input_path, output_path):
+    # print(f"Converting to 16-bit: {input_path} → {output_path}")
+    
+    # Ensure the output directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    cmd = [
+        'ffmpeg',
+        '-y',   # This tells FFmpeg: "yes, overwrite existing files"
+        '-i', input_path,
+        '-sample_fmt', 's16',  # Set sample format to 16-bit
+        output_path
+    ]
+
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # if result.returncode != 0:
+    #     print(f"FFmpeg error converting {input_path}:\n{result.stderr}")
+    # else:
+    #     print(f"Successfully converted {input_path} to 16-bit")

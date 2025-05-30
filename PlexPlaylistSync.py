@@ -128,12 +128,21 @@ def copy_files(playlistItems: list[PlaylistItem]):
     errors = []
 
     for i, value in enumerate(playlistItems):
-        index = "[%i/%i] %s..." % (i+1, len(playlistItems), value.title)
+        bit_depth = get_bit_depth(value.fsPath)
+        index = "[%i/%i][%ibit] %s..." % (i+1, len(playlistItems), bit_depth, value.title)
         try:
             if should_copy_file_if_newer(value.fsPath, value.outPath): 
-                print(index, end='', flush=True)
-                copy_file_if_newer(value.fsPath, value.outPath)
-                print(' Copied')
+                if bit_depth and bit_depth > 16:
+                    print(index, end='', flush=True)
+                    convert_to_16bit(value.fsPath, value.outPath)
+                    print(' Converted & Copied')
+                    if get_bit_depth(value.outPath) != 16:
+                        print('Warning: %s was not converted to 16 bit' % value.outPath)
+                        errors.append('Warning: %s was not converted to 16 bit' % value.outPath)
+                else:
+                    print(index, end='', flush=True)
+                    copy_file_if_newer(value.fsPath, value.outPath)
+                    print(' Copied')
         except Exception as e:
             print('%s Error: %s' % (index, e))
             errors.append(e)
