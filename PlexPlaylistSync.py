@@ -124,21 +124,25 @@ def create_m3u8_extended_relative(
     m3u.close()
 
 # Copies all playlist files, using fsPath and outPath for each PlaylistItem
-def copy_files(playlistItems: list[PlaylistItem]):
+def copy_files(playlistItems: list[PlaylistItem], warnLossy: False):
     errors = []
 
     for i, value in enumerate(playlistItems):
         bit_depth = get_bit_depth(value.fsPath)
-        index = "[%i/%i][%ibit] %s..." % (i+1, len(playlistItems), bit_depth, value.title)
+        index = "[%i/%i][%sbit] %s..." % (i+1, len(playlistItems), bit_depth, value.title)
+        if bit_depth is None and warnLossy is True:
+            errors.append('Could not determine bit depth (could be lossy mp3/m4a/ogg?) File: %s' % value.fsPath);
+
         try:
             if should_copy_file_if_newer(value.fsPath, value.outPath): 
-                if bit_depth and bit_depth > 16:
+                if bit_depth is not None and bit_depth > 16:
                     print(index, end='', flush=True)
                     convert_to_16bit(value.fsPath, value.outPath)
-                    print(' Converted & Copied')
                     if get_bit_depth(value.outPath) != 16:
-                        print('Warning: %s was not converted to 16 bit' % value.outPath)
-                        errors.append('Warning: %s was not converted to 16 bit' % value.outPath)
+                        print(' Copied but could not convert.')
+                        errors.append('Failed to convert to 16bit: %s'  % value.fsPath)
+                    else:
+                        print(' Converted & Copied')
                 else:
                     print(index, end='', flush=True)
                     copy_file_if_newer(value.fsPath, value.outPath)
@@ -204,8 +208,9 @@ def parse_album_art(root_folder):
             try:
                 future.result()
             except Exception as e:
-                print(f"Error processing {futures[future]}: {e}")
-                errors.append(e)
+                log = f"Could not process album art of {futures[future]}: {e}"
+                print(log)
+                errors.append(log)
     
     return errors
 
@@ -286,11 +291,12 @@ def main():
     print('')
     print('Syncing files')
     errors = []
-    errors.extend(copy_files(all_songs))
+    errors.extend(copy_files(all_songs, config.warn_lossy_format))
     
-    print('')
-    print("Checking album art")
-    errors.extend(parse_album_art(music_dir));
+    if not config.skip_album_art_checks:
+        print('')
+        print("Checking album art")
+        errors.extend(parse_album_art(music_dir));
     
     print('')
     print("Job's done")

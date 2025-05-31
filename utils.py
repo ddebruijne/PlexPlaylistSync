@@ -25,6 +25,8 @@ DEFAULT_CONFIG = Config({
     "sync_extended_relative": True,
     "sync_simple_abstract": False,
     "token": None,
+    "skip_album_art_checks": False,
+    "warn_lossy_format": True
 })
 
 def parse_args():
@@ -58,12 +60,22 @@ def parse_args():
     parser.add_argument(
         '--sync-extended-relative',
         type = bool,
-        help = "Whether to sync playlist files with relative paths and extended information, as .m3u8. Recommended for Rockbox, Mazda Connect",
+        help = "Whether to sync playlist files with relative paths and extended information, as .m3u8.",
     )
     parser.add_argument(
         '--sync-simple-abstract',
         type = bool,
         help = "Whether to sync playlist files with abstract paths (root = out-dir) and no information, as .m3u. Recommended for Peugeot infotainment system (e-208)",
+    )
+    parser.add_argument(
+        '--skip-album-art-checks',
+        type = bool,
+        help = "Whether to skip album art conversion checks. If set, album art will not be converted to baseline JPEG.",
+    )
+    parser.add_argument(
+        '--warn-lossy-format',
+        type = bool,
+        help = "Whether to add warnings for lossy formats in the output.",
     )
     return parser.parse_args()
 
@@ -224,6 +236,23 @@ def ensure_access_to_folder(path):
         return True # no log, not a gvfs share
 
 def get_bit_depth(file_path):
+    # First get the codec
+    codec_cmd = [
+        'ffprobe', '-v', 'error',
+        '-select_streams', 'a:0',
+        '-show_entries', 'stream=codec_name',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        file_path
+    ]
+    codec_result = subprocess.run(codec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    codec = codec_result.stdout.strip()
+
+    # Skip conversion for lossy formats
+    lossy_codecs = ['aac', 'mp3', 'opus', 'vorbis']
+    if codec in lossy_codecs:
+        return None
+
+    # Try bits_per_raw_sample
     cmd = [
         'ffprobe', '-v', 'error',
         '-select_streams', 'a:0',
@@ -232,17 +261,38 @@ def get_bit_depth(file_path):
         file_path
     ]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if result.returncode == 0:
-        output = result.stdout.strip()
-        if output:
-            return int(output)
-    return None
+    raw = result.stdout.strip()
+
+    if raw and raw != 'N/A':
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+
+    # Fallback: sample_fmt
+    cmd2 = [
+        'ffprobe', '-v', 'error',
+        '-select_streams', 'a:0',
+        '-show_entries', 'stream=sample_fmt',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        file_path
+    ]
+    result2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    fmt = result2.stdout.strip()
+
+    sample_fmt_to_bit_depth = {
+        's16': 16,
+        's16p': 16,
+        's24': 24,
+        's32': 32,
+        'flt': 32,
+        'dbl': 64,
+    }
+
+    return sample_fmt_to_bit_depth.get(fmt, None)
 
 def convert_to_16bit(input_path, output_path):
-    # print(f"Converting to 16-bit: {input_path} → {output_path}")
-    
-    # Ensure the output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)    # ensure the output directory exists
 
     cmd = [
         'ffmpeg',
@@ -252,9 +302,5 @@ def convert_to_16bit(input_path, output_path):
         output_path
     ]
 
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    # if result.returncode != 0:
-    #     print(f"FFmpeg error converting {input_path}:\n{result.stderr}")
-    # else:
-    #     print(f"Successfully converted {input_path} to 16-bit")
+    # returns 0 if successful, non-zero if error
+    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
