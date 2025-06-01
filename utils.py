@@ -13,7 +13,7 @@ class Config(dict):
         try:
             return self[item]
         except KeyError:
-            raise AttributeError(f"'Config' object has no attribute '{item}'")
+            return None
 
     def __setattr__(self, key, value):
         self[key] = value
@@ -26,56 +26,61 @@ DEFAULT_CONFIG = Config({
     "sync_simple_abstract": False,
     "token": None,
     "skip_album_art_checks": False,
-    "warn_lossy_format": True
+    "warn_lossy_format": False,
+    "ignore_playlists": [
+        "All Music",
+        "Recently Added",
+        "Recently Played"
+    ]
 })
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        '--out-dir',
+        'out_dir',
         type = str,
-        help = "Root dir for the output files, eg your flash drive (/run/media/$USER/FLASHDRIVENAME)",
-        default = "out",
+        help = "Root dir for the output files. This can be your flash drive, iPod or a local directory.",
+        default = "out"
     )
     parser.add_argument(
         '--fs-music-root',
         type = str,
-        help = "The root of the filesystem music library location, for instance '/smb-mounts/media/music'",
+        help = "The root of the filesystem music library location. If this is on an SMB share and you are using Gnome/GVfs, the path will be automatically mounted.",
     )
     parser.add_argument(
         '--plex-music-root',
         type = str,
-        help = "The root of the plex music library location, for instance '/music'",
+        help = "The root of the plex music library location. Needs to match the same location as fs-music-root, but as it is seen by the Plex Server.",
     )
     parser.add_argument(
         '--host',
         type = str,
-        help = "The URL to the Plex Server, i.e.: http://192.168.0.100:32400",
+        help = "The URL to the Plex Server. Should be a direct URL/IP, including http(s) and the port.",
     )
     parser.add_argument(
         '--token',
         type = str,
-        help = "The Token used to authenticate with the Plex Server",
+        help = "The token used to authenticate with the Plex Server",
     )
     parser.add_argument(
         '--sync-extended-relative',
         type = bool,
-        help = "Whether to sync playlist files with relative paths and extended information, as .m3u8.",
+        help = "Creates playlist files with relative paths and extended information, as .m3u8. Recommended for Rockbox.",
     )
     parser.add_argument(
         '--sync-simple-abstract',
         type = bool,
-        help = "Whether to sync playlist files with abstract paths (root = out-dir) and no information, as .m3u. Recommended for Peugeot infotainment system (e-208)",
+        help = "Creates playlist files with abstract paths (root = out-dir) and no information, as .m3u. Recommended for Peugeot infotainment system (e-208)",
     )
     parser.add_argument(
         '--skip-album-art-checks',
         type = bool,
-        help = "Whether to skip album art conversion checks. If set, album art will not be converted to baseline JPEG.",
+        help = "Skips album art conversion checks. If set, album art will not be converted to baseline JPEG. Should be false for Mazda Connect infotainment system, but recommended to be true otherwise",
     )
     parser.add_argument(
         '--warn-lossy-format',
         type = bool,
-        help = "Whether to add warnings for lossy formats in the output.",
+        help = "Adds warnings for lossy formats (like mp3, ogg and some m4a) in the output. Only useful if you want to identify lossy files in your music library.",
     )
     return parser.parse_args()
 
