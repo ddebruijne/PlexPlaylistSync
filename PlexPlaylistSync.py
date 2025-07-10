@@ -123,23 +123,32 @@ def copy_files(playlistItems: list[PlaylistItem], warnLossy: False):
     for i, value in enumerate(playlistItems):
         bit_depth = get_bit_depth(value.fsPath)
         index = "[%i/%i][%sbit] %s..." % (i+1, len(playlistItems), bit_depth, value.title)
-        if bit_depth is None and warnLossy is True:
-            errors.append('Could not determine bit depth (could be lossy mp3/m4a/ogg?) File: %s' % value.fsPath);
+        # if bit_depth is None and warnLossy is True:
+        #     errors.append('Could not determine bit depth (could be lossy mp3/m4a/ogg?) File: %s' % value.fsPath);
 
         try:
-            if should_copy_file_if_newer(value.fsPath, value.outPath): 
-                if bit_depth is not None and bit_depth > 16:
-                    print(index, end='', flush=True)
-                    convert_to_16bit(value.fsPath, value.outPath)
-                    if get_bit_depth(value.outPath) != 16:
-                        print(' Copied but could not convert.')
-                        errors.append('Failed to convert to 16bit: %s'  % value.fsPath)
-                    else:
-                        print(' Converted & Copied')
-                else:
-                    print(index, end='', flush=True)
-                    copy_file_if_newer(value.fsPath, value.outPath)
-                    print(' Copied')
+            print(index, end='', flush=True)
+            convert_to_mp3_320(value.fsPath, value.outPath)
+            copy_modification_time(value.fsPath, value.outPath)
+
+            if not value.outPath.lower().endswith(".mp3"):
+                print(' Copied but could not convert.')
+                errors.append('Failed to convert to mp3: %s' % value.fsPath)
+            else:
+                print(' Converted & Copied')
+            # if should_copy_file_if_newer(value.fsPath, value.outPath): 
+            #     if bit_depth is not None and bit_depth > 16:
+            #         print(index, end='', flush=True)
+            #         convert_to_16bit(value.fsPath, value.outPath)
+            #         if get_bit_depth(value.outPath) != 16:
+            #             print(' Copied but could not convert.')
+            #             errors.append('Failed to convert to 16bit: %s'  % value.fsPath)
+            #         else:
+            #             print(' Converted & Copied')
+            #     else:
+            #         print(index, end='', flush=True)
+            #         copy_file_if_newer(value.fsPath, value.outPath)
+            #         print(' Copied')
         except Exception as e:
             print('%s Error: %s' % (index, e))
             errors.append(e)

@@ -116,20 +116,10 @@ def update_config(config_path, config, args):
         json.dump(config, file, indent=4)
     print(f"Updated configuration saved to {config_path}")
 
-
-def rename_file_keep_extension(file_path, new_name):
-    directory, old_filename = os.path.split(file_path)
-    name, extension = os.path.splitext(old_filename)
-    new_filename = new_name + extension
-    new_path = os.path.join(directory, new_filename)
-    
-    os.rename(file_path, new_path)
-    return new_path
-
 def rename_filename_keep_extension(file_path, new_name):
     directory, old_filename = os.path.split(file_path)
-    _, extension = os.path.splitext(old_filename)
-    result = os.path.join(directory, new_name + extension)
+    # Always use .mp3 extension
+    result = os.path.join(directory, new_name + ".mp3")
     return result
 
 def get_minute_rounded_mtime(filepath):
@@ -296,16 +286,18 @@ def get_bit_depth(file_path):
 
     return sample_fmt_to_bit_depth.get(fmt, None)
 
-def convert_to_16bit(input_path, output_path):
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)    # ensure the output directory exists
+def convert_to_mp3_320(input_path, output_path):
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     cmd = [
         'ffmpeg',
-        '-y',   # This tells FFmpeg: "yes, overwrite existing files"
+        '-y',
         '-i', input_path,
-        '-sample_fmt', 's16',  # Set sample format to 16-bit
+        '-codec:a', 'libmp3lame',
+        '-b:a', '320k',
+        '-map_metadata', '0',
+        '-id3v2_version', '3',
         output_path
     ]
 
-    # returns 0 if successful, non-zero if error
     return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
