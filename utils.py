@@ -7,6 +7,8 @@ import argparse
 import socket
 import subprocess
 from PIL import Image
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, APIC, error
 
 class Config(dict):
     def __getattr__(self, item):
@@ -289,6 +291,10 @@ def get_bit_depth(file_path):
 def convert_to_mp3_320(input_path, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+    # Step 1: Extract album art (as bytes)
+    cover_data = extract_album_art_data(input_path)
+
+    # Step 2: Convert to MP3
     cmd = [
         'ffmpeg',
         '-y',
@@ -299,5 +305,44 @@ def convert_to_mp3_320(input_path, output_path):
         '-id3v2_version', '3',
         output_path
     ]
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # Step 3: Re-insert album art
+    if cover_data:
+        try:
+            audio = MP3(output_path, ID3=ID3)
+            if audio.tags is None:
+                audio.add_tags()
+            audio.tags.add(APIC(
+                encoding=3,         # UTF-8
+                mime="image/jpeg",  # or "image/png" if needed
+                type=3,             # Cover (front)
+                desc="Cover",
+                data=cover_data
+            ))
+            audio.save()
+        except error as e:
+            print(f"Failed to embed album art in {output_path}: {e}")
+
+def extract_album_art_data(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
+    try:
+        if ext == ".mp3":
+            audio = MP3(filepath, ID3=ID3)
+            if audio.tags:
+                for tag in audio.tags.values():
+                    if isinstance(tag, APIC):
+                        return tag.data
+        elif ext == ".flac":
+            from mutagen.flac import FLAC
+            audio = FLAC(filepath)
+            if audio.pictures:
+                return audio.pictures[0].data
+        elif ext == ".m4a":
+            from mutagen.mp4 import MP4
+            audio = MP4(filepath)
+            if "covr" in audio.tags:
+                return audio.tags["covr"][0]
+    except Exception as e:
+        print(f"Warning: Failed to extract album art from {filepath}: {e}")
+    return None

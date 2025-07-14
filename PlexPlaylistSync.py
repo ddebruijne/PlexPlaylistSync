@@ -123,32 +123,32 @@ def copy_files(playlistItems: list[PlaylistItem], warnLossy: False):
     for i, value in enumerate(playlistItems):
         bit_depth = get_bit_depth(value.fsPath)
         index = "[%i/%i][%sbit] %s..." % (i+1, len(playlistItems), bit_depth, value.title)
-        # if bit_depth is None and warnLossy is True:
-        #     errors.append('Could not determine bit depth (could be lossy mp3/m4a/ogg?) File: %s' % value.fsPath);
+        if bit_depth is None and warnLossy is True:
+            errors.append('Could not determine bit depth (could be lossy mp3/m4a/ogg?) File: %s' % value.fsPath);
 
         try:
-            print(index, end='', flush=True)
-            convert_to_mp3_320(value.fsPath, value.outPath)
-            copy_modification_time(value.fsPath, value.outPath)
+            if should_copy_file_if_newer(value.fsPath, value.outPath): 
+                print(index, end='', flush=True)
+                convert_to_mp3_320(value.fsPath, value.outPath)
 
-            if not value.outPath.lower().endswith(".mp3"):
-                print(' Copied but could not convert.')
-                errors.append('Failed to convert to mp3: %s' % value.fsPath)
-            else:
-                print(' Converted & Copied')
-            # if should_copy_file_if_newer(value.fsPath, value.outPath): 
-            #     if bit_depth is not None and bit_depth > 16:
-            #         print(index, end='', flush=True)
-            #         convert_to_16bit(value.fsPath, value.outPath)
-            #         if get_bit_depth(value.outPath) != 16:
-            #             print(' Copied but could not convert.')
-            #             errors.append('Failed to convert to 16bit: %s'  % value.fsPath)
-            #         else:
-            #             print(' Converted & Copied')
-            #     else:
-            #         print(index, end='', flush=True)
-            #         copy_file_if_newer(value.fsPath, value.outPath)
-            #         print(' Copied')
+                if not value.outPath.lower().endswith(".mp3"):
+                    print(' Copied but could not convert.')
+                    errors.append('Failed to convert to mp3: %s' % value.fsPath)
+                else:
+                    print(' Converted & Copied')
+
+                # if bit_depth is not None and bit_depth > 16:
+                #     print(index, end='', flush=True)
+                #     convert_to_16bit(value.fsPath, value.outPath)
+                #     if get_bit_depth(value.outPath) != 16:
+                #         print(' Copied but could not convert.')
+                #         errors.append('Failed to convert to 16bit: %s'  % value.fsPath)
+                #     else:
+                #         print(' Converted & Copied')
+                # else:
+                #     print(index, end='', flush=True)
+                #     copy_file_if_newer(value.fsPath, value.outPath)
+                #     print(' Copied')
         except Exception as e:
             print('%s Error: %s' % (index, e))
             errors.append(e)
@@ -161,16 +161,20 @@ def parse_album_art_audiofile(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     if ext == ".mp3":
         audio = MP3(filepath, ID3=ID3)
-        if audio.tags and "APIC:" in audio.tags:
-            apic = audio.tags["APIC:"]
-            new_art = convert_album_art_image_baseline_jpeg(apic.data, filepath)
-            if new_art != apic.data:
-                audio.tags["APIC:"] = APIC(
-                    encoding=3, mime="image/jpeg", type=3, desc="Cover", data=new_art
-                )
-                audio.save()
+        if audio.tags:
+            apic_frames = [tag for tag in audio.tags.values() if isinstance(tag, APIC)]
+            if apic_frames:
+                apic = apic_frames[0]
+                new_art = convert_album_art_image_baseline_jpeg(apic.data, filepath)
+                if new_art != apic.data:
+                    audio.tags.add(APIC(
+                        encoding=3, mime="image/jpeg", type=3, desc="Cover", data=new_art
+                    ))
+                    audio.save()
+            else:
+                print(f"- {os.path.basename(filepath)}... No album art.")
         else:
-            print(f"- {os.path.basename(filepath)}... No album art.")
+            print(f"- {os.path.basename(filepath)}... No ID3 tags.")
     elif ext == ".flac":
         audio = FLAC(filepath)
         if audio.pictures:
